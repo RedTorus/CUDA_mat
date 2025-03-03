@@ -19,17 +19,21 @@ __global__ void kernel_call(int N, float *in, float* out)
    // for (int i = 0; i != 64*64/blockDim.x; ++i)
    //    share_buf[i*2 + (id % 64)*64 + (id / 64)] = in[id + blockDim.x*i]; 
 
-   int offset = (id/32)*16;
+   int offset = (id/32)*16; //between 16 and 4*16. Shows starting position of next contiguous section
+   //Splitting 64*64 matrix up into blocks or 32*32 matrix
    int fac= 64; //blockDim.x/4; //32
    int col;
    int row;
-   for (int i = 0; i != 64*64/blockDim.x; ++i){
-      //share_buf[offset + (id % 32) + i * fac] = in[id + blockDim.x * i];
-      col = (i%2)*32;
-      row= i/2;
+   //For threads between 0 and 31 folling out rows 0 to 15, next chunk responsible for 16-31 etc
+   // Each warp responbsible for section of size 16*64
+   // each thread in warp assigned one bank
+   for (int i = 0; i != 64*64/blockDim.x; ++i){ //i goes up to 32 since each thread responsible for 32 elements
+      
+      col = (i%2)*32; //varies between 0 and 32 so that always same memory bank accessed
+      row= i/2; //row should remain same for 2 consecutive i
       share_buf[row + offset + fac*( (id%32) +col)] = in[id%32 + col + fac*(row +offset)];
-      //share_buf[offset + row + (id % 32) + i * fac] = in[id + blockDim.x * i];
-   }   
+      
+   }  
 
 
 
@@ -47,7 +51,7 @@ int main(){
     float *host_in, *host_out;
     float *dev_in, *dev_out;
 
-    size_t N = 64*3;
+    size_t N = 64*6;
 		
     //create buffer on host	
     host_in = (float*) malloc(N * N * sizeof(float));
@@ -80,8 +84,8 @@ int main(){
     cudaEventCreate(&et2);        
      
     cudaEventRecord(st2);
-    int factor= N/64;
-    int numT= factor*factor;
+    int factor= N/64; //numer of tiles in a row
+    int numT= factor*factor; // number of 64*64 matrix tiles in matrix
     int tilesize=64*64;
     int row;
     int col;
@@ -92,7 +96,7 @@ int main(){
       row = i/factor;
       ind = i * 64*64;
       // For the transposed tile, swap row and col:
-      tind = (col * factor + row) * tilesize;
+      tind = (col * factor + row) * tilesize;    // index of transposed tile position in output matrix
       kernel_call<<<1, 128>>>(64, dev_in + ind, dev_out + tind);
     }
     cudaEventRecord(et2);
@@ -114,7 +118,7 @@ int main(){
           correct &= (host_out[i*N+j] == host_in[j*N+i]);
     cout<<(correct ? "Yes" : "No")<<endl;	 
 
-
+   // New correctness checker since old one doesn't work for contiguous tiles of 64*64 matrices in memory
    correct = true;
 
    for (int tr = 0; tr < factor; tr++) {

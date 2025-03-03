@@ -21,19 +21,23 @@ __global__ void kernel_call(int N, float *in, float* out)
    //read 2 rows at a time, write 2 columns at a time
    // for (int i = 0; i != 64*64/blockDim.x; ++i)
    //    share_buf[i*2 + (id % 64)*64 + (id / 64)] = in[id + blockDim.x*i]; 
-   in = in + tilex*64*64 + N*64*tiley;
-   out = out + tiley*64*64 + N*64*tilex;
+   in = in + tilex*64*64 + N*64*tiley;  // index of tile 
+   out = out + tiley*64*64 + N*64*tilex; // index of tile in transposed matrix
 
-   int offset = (id/32)*16;
+   int offset = (id/32)*16; //between 16 and 4*16. Shows starting position of next contiguous section
+   //Splitting 64*64 matrix up into blocks or 32*32 matrix
    int fac= 64; //blockDim.x/4; //32
    int col;
    int row;
-   for (int i = 0; i != 64*64/blockDim.x; ++i){
-      //share_buf[offset + (id % 32) + i * fac] = in[id + blockDim.x * i];
-      col = (i%2)*32;
-      row= i/2;
+   //For threads between 0 and 31 folling out rows 0 to 15, next chunk responsible for 16-31 etc
+   // Each warp responbsible for section of size 16*64
+   // each thread in warp assigned one bank
+   for (int i = 0; i != 64*64/blockDim.x; ++i){ //i goes up to 32 since each thread responsible for 32 elements
+      
+      col = (i%2)*32; //varies between 0 and 32 so that always same memory bank accessed
+      row= i/2; //row should remain same for 2 consecutive i
       share_buf[row + offset + fac*( (id%32) +col)] = in[id%32 + col + fac*(row +offset)];
-      //share_buf[offset + row + (id % 32) + i * fac] = in[id + blockDim.x * i];
+      
    }   
  
    __syncthreads();  //wait till everyone is done
@@ -49,7 +53,7 @@ int main(){
     float *host_in, *host_out;
     float *dev_in, *dev_out;
 
-    size_t N = 128;
+    size_t N = 64*6;
 		
     //create buffer on host	
     host_in = (float*) malloc(N * N * sizeof(float));

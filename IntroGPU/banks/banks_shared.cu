@@ -19,33 +19,40 @@ __global__ void kernel_call(int N, float *in, float* out)
    // for (int i = 0; i != 64*64/blockDim.x; ++i)
    //    share_buf[i*2 + (id % 64)*64 + (id / 64)] = in[id + blockDim.x*i]; 
 
-   int offset = (id/32)*16;
+   int offset = (id/32)*16; //between 16 and 4*16. Shows starting position of next contiguous section
+   //Splitting 64*64 matrix up into blocks or 32*32 matrix
    int fac= 64; //blockDim.x/4; //32
    int col;
    int row;
-   for (int i = 0; i != 64*64/blockDim.x; ++i){
-      //share_buf[offset + (id % 32) + i * fac] = in[id + blockDim.x * i];
-      col = (i%2)*32;
-      row= i/2;
+   //For threads between 0 and 31 folling out rows 0 to 15, next chunk responsible for 16-31 etc
+   // Each warp responbsible for section of size 16*64
+   // each thread in warp assigned one bank
+   for (int i = 0; i != 64*64/blockDim.x; ++i){ //i goes up to 32 since each thread responsible for 32 elements
+      
+      col = (i%2)*32; //varies between 0 and 32 so that always same memory bank accessed
+      row= i/2; //row should remain same for 2 consecutive i
       share_buf[row + offset + fac*( (id%32) +col)] = in[id%32 + col + fac*(row +offset)];
-      //share_buf[offset + row + (id % 32) + i * fac] = in[id + blockDim.x * i];
+      
    }   
+
+
+   //                    Diagonalized approach
 
    // int total = 64 * 64;
 
    // for (int x = id; x < total; x += blockDim.x) {
    //    int r, c;
    //    if (x < 64) {
-   //       // Main diagonal: x -> (x, x)
+   //    //Main diagonal: x -> (x, x)
    //       r = x;
    //       c = x;
    //    } else {
    //       int t = x - 64;
    //       if (t < 2016) {
-   //          // Upper triangle: elements where r < c.
+   //        //  Upper triangle: elements where r < c.
    //          int sum = 0;
    //          int r0 = 0;
-   //          // For row r0, number of off-diagonals = (63 - r0)
+   //        //  For row r0, number of off-diagonals = (63 - r0)
    //          while (r0 < 63 && sum + (63 - r0) <= t) {
    //             sum += (63 - r0);
    //             r0++;
@@ -53,11 +60,11 @@ __global__ void kernel_call(int N, float *in, float* out)
    //          r = r0;
    //          c = r0 + 1 + (t - sum);
    //       } else {
-   //          // Lower triangle: elements where r > c.
+   //        //  Lower triangle: elements where r > c.
    //          int t2 = t - 2016;
    //          int sum = 0;
    //          int r0 = 1;
-   //          // For row r0, number of lower off-diagonals = r0
+   //       //   For row r0, number of lower off-diagonals = r0
    //          while (r0 < 64 && sum + r0 <= t2) {
    //             sum += r0;
    //             r0++;
@@ -66,10 +73,9 @@ __global__ void kernel_call(int N, float *in, float* out)
    //          c = t2 - sum;
    //       }
    //    }
-   //    // Write the transposed element:
-   //    // We want share_buf[r*64 + c] = in[c*64 + r]
+     
    //    share_buf[r * 64 + c] = in[c * 64 + r];
-   // }
+   //  }
 
 
 

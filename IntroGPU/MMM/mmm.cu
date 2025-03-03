@@ -32,6 +32,7 @@ __global__ void kernel_call(float *c)
   //Computes C += A * B using only 1 thread
   //A is column major order, the other 2 matrices are row major order
   
+  // Given approach commented out due to inefficiency
   // for (int i = 0; i < 64; ++i){      //64 rows of C
   //   for (int j = 0; j < 64; ++j){    //64 columns of C
   //     loc=s_c[i*64+j];
@@ -62,7 +63,7 @@ __global__ void kernel_call(float *c)
     s_c[i*64+j] = loc;
   }
 
-  //bank conflic minimizing approach (works only for 32 threads)
+  //                            bank conflic minimizing approach (works only for 32 threads)
 
   // int row = thread_number - 1;
 
@@ -97,7 +98,7 @@ __global__ void kernel_call(float *c)
 
   // }}
 
-  //other approach 
+  //                                other approach  specialized for 64 threads, almost as efficient as uncommented approach, a litlle slower (0.25 ms more)
 
   // int row = thread_number - 1;
   // if (row<64){
